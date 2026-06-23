@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # MongoDB Database Service
+  mongodb:
+    image: mongo:6.0
+    container_name: civic_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - civic_network
+
+  # FastAPI Backend Service
+  backend:
+    build: ./backend
+    container_name: civic_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017
+      - DATABASE_NAME=smart_civic_guardian
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - backend_uploads:/app/data
+    depends_on:
+      - mongodb
+    networks:
+      - civic_network
+
+  # React Frontend Service
+  frontend:
+    build: ./frontend
+    container_name: civic_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - civic_network
+
+volumes:
+  mongodb_data:
+  backend_uploads:
+
+networks:
+  civic_network:
+    driver: bridge
