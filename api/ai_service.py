@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from PIL import Image
-import backend.config as config
+import api.config as config
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -36,13 +36,14 @@ if config.GEMINI_API_KEY:
 else:
     logger.info("No GEMINI_API_KEY found in configuration. Gemini analysis will be mocked.")
 
-def run_local_yolo(image_path: str) -> dict:
+def run_local_yolo(image_input) -> dict:
     """Runs local YOLOv8 to detect COCO objects and infers indicators for civic issues."""
     if not YOLO_AVAILABLE or yolo_model is None:
         return {"objects_detected": [], "indicators": {}}
         
     try:
-        results = yolo_model(image_path, verbose=False)
+        # YOLOv8 accepts file paths, PIL Images, or tensors directly
+        results = yolo_model(image_input, verbose=False)
         detected = []
         indicators = {
             "traffic_density": 0,
@@ -76,17 +77,24 @@ def run_local_yolo(image_path: str) -> dict:
         logger.error(f"YOLO execution failed: {e}")
         return {"objects_detected": [], "indicators": {}}
 
-def run_gemini_analysis(image_path: str, category_hint: str) -> dict:
+def run_gemini_analysis(image_input, category_hint: str) -> dict:
     """Uses Gemini API to analyze the image and return a structured analysis of the civic issue."""
     if not GEMINI_AVAILABLE:
         return {}
         
     try:
-        # Load the image
-        img = Image.open(image_path)
-        
+        # Load the image depending on whether it is a path, stream, or PIL Image object
+        if isinstance(image_input, str):
+            img = Image.open(image_input)
+        elif hasattr(image_input, "read"):
+            # Reset seek pointer just in case
+            if hasattr(image_input, "seek"):
+                image_input.seek(0)
+            img = Image.open(image_input)
+        else:
+            img = image_input
+            
         # Prepare the model (using gemini-1.5-flash for speed and lower latency)
-        # fallback to gemini-2.5-flash if preferred
         model_name = "gemini-1.5-flash"
         model = genai.GenerativeModel(model_name)
         
@@ -191,17 +199,17 @@ def run_mock_analysis(category_hint: str, yolo_results: dict) -> dict:
         "action_recommendation": action
     }
 
-def analyze_civic_issue(image_path: str, category_hint: str) -> dict:
+def analyze_civic_issue(image_input, category_hint: str) -> dict:
     """Main AI Service Entrypoint: Runs local YOLO, tries Gemini, falls back to smart mock if needed."""
-    logger.info(f"Starting AI analysis on {image_path} with hint '{category_hint}'")
+    logger.info(f"Starting AI analysis on image stream with hint '{category_hint}'")
     
     # 1. Run local YOLOv8
-    yolo_results = run_local_yolo(image_path)
+    yolo_results = run_local_yolo(image_input)
     
     # 2. Try Gemini analysis
     gemini_results = {}
     if GEMINI_AVAILABLE:
-        gemini_results = run_gemini_analysis(image_path, category_hint)
+        gemini_results = run_gemini_analysis(image_input, category_hint)
         
     # 3. Compile results: prefer Gemini, fallback to mock, supplement with YOLO detections
     if gemini_results and "category" in gemini_results:

@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
-import backend.config as config
+import api.config as config
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)

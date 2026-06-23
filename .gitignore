@@ -6,29 +6,29 @@ frontend/node_modules/
 venv/
 .venv/
 env/
-backend/venv/
+api/venv/
 
 # Build folders
 dist/
 frontend/dist/
 
 # SQLite databases
-backend/data/*.db
+api/data/*.db
 *.db
 
 # Uploaded assets
-backend/data/uploads/*
-!backend/data/uploads/.gitkeep
+api/data/uploads/*
+!api/data/uploads/.gitkeep
 
 # Environment variables
 .env
-backend/.env
+api/.env
 frontend/.env.local
 
 # Python caches
 __pycache__/
 *.pyc
-backend/__pycache__/
+api/__pycache__/
 frontend/__pycache__/
 
 # IDE/OS files

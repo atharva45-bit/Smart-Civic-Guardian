@@ -14,7 +14,7 @@ services:
 
   # FastAPI Backend Service
   backend:
-    build: ./backend
+    build: ./api
     container_name: civic_backend
     ports:
       - "8000:8000"

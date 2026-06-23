@@ -7,10 +7,10 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-import backend.config as config
-from backend.database import db
-from backend.models import ReportResponse, StatusUpdate, HotspotResponse
-from backend.ai_service import analyze_civic_issue
+import api.config as config
+from api.database import db
+from api.models import ReportResponse, StatusUpdate, HotspotResponse
+from api.ai_service import analyze_civic_issue
 
 app = FastAPI(
     title="Smart Civic Guardian API",
@@ -22,18 +22,11 @@ app = FastAPI(
 import uuid
 
 # Configure CORS so the React frontend can make requests securely
-# We restrict allowed origins to local development servers to prevent cross-site request forgery/hijacking
-ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost",
-    "http://127.0.0.1"
-]
-
+# We allow all origins without credentials, which is secure and supports serverless preview domains
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -122,21 +115,48 @@ async def create_report(
                 detail="Invalid file extension. Only .jpg, .jpeg, .png, .webp, and .gif are allowed."
             )
         
-        filename = f"{uuid.uuid4()}{orig_ext}"
-        file_path = os.path.join(config.UPLOAD_DIR, filename)
-        
-        # Save file to disk
-        try:
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(image.file, buffer)
-            
-            # Formulate the URL path
-            image_url = f"/uploads/{filename}"
-            
-            # 2. Run AI Analysis
-            ai_result = analyze_civic_issue(file_path, category)
-            ai_confidence = ai_result.get("confidence", 0.8)
-            ai_analysis = ai_result
+        # 3. Check if Cloudinary is configured. If so, upload directly in-memory.
+        # Otherwise, fall back to writing files to the local file system.
+        if config.CLOUDINARY_CONFIGURED:
+            import cloudinary.uploader
+            try:
+                # Upload direct stream to Cloudinary
+                upload_result = cloudinary.uploader.upload(
+                    image.file,
+                    folder="smart_civic_guardian"
+                )
+                image_url = upload_result.get("secure_url")
+                
+                # Run AI Analysis using in-memory file stream
+                await image.seek(0)
+                ai_result = analyze_civic_issue(image.file, category)
+                ai_confidence = ai_result.get("confidence", 0.8)
+                ai_analysis = ai_result
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Cloudinary upload or AI analysis failed: {str(e)}"
+                )
+        else:
+            # Fallback to local files saving
+            filename = f"{uuid.uuid4()}{orig_ext}"
+            file_path = os.path.join(config.UPLOAD_DIR, filename)
+            try:
+                with open(file_path, "wb") as buffer:
+                    shutil.copyfileobj(image.file, buffer)
+                
+                # Formulate the URL path
+                image_url = f"/uploads/{filename}"
+                
+                # 2. Run AI Analysis
+                ai_result = analyze_civic_issue(file_path, category)
+                ai_confidence = ai_result.get("confidence", 0.8)
+                ai_analysis = ai_result
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Local upload or AI analysis failed: {str(e)}"
+                )
             
             # Update category and severity if AI refined it
             if "category" in ai_result:
