@@ -1,0 +1,23 @@
+# Local Python Virtual Environments
+api/venv/
+venv/
+.venv/
+
+# Python Cache
+api/__pycache__/
+__pycache__/
+
+# Local SQLite databases and uploads
+api/data/*.db
+*.db
+api/data/uploads/*
+!api/data/uploads/.gitkeep
+
+# Node packages and production build folder
+node_modules/
+dist/
+
+# Version control and config files
+.git/
+.idea/
+.vscode/
